@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Smart Switch</title>
+</head>
+<body>
+
+  <div id="loginBox">
+    <h1>Login</h1>
+    <input id="u" placeholder="Username">
+    <input id="p" type="password" placeholder="Password">
+    <button onclick="login()">Masuk</button>
+    <p id="err" style="color:red"></p>
+  </div>
+
+  <div id="dashBox" style="display:none">
+    <h1>Smart Switch</h1>
+    <p>Halo, <span id="nama"></span></p>
+    <p>Perangkat: <b id="online">-</b></p>
+    <p>Relay: <b id="state">-</b></p>
+
+    <button onclick="kirim('ON')">ON</button>
+    <button onclick="kirim('OFF')">OFF</button>
+    <button onclick="kirim('TOGGLE')">TOGGLE</button>
+
+    <p><button onclick="logout()">Keluar</button></p>
+  </div>
+
+<script>
+let poller;
+
+async function login() {
+  document.getElementById("err").textContent = "";
+  const r = await fetch("/api/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      username: document.getElementById("u").value,
+      password: document.getElementById("p").value
+    })
+  });
+  if (!r.ok) {
+    document.getElementById("err").textContent = "User atau password salah";
+    return;
+  }
+  cekLogin();
+}
+
+async function logout() {
+  await fetch("/api/logout", { method: "POST" });
+  clearInterval(poller);
+  document.getElementById("dashBox").style.display = "none";
+  document.getElementById("loginBox").style.display = "block";
+}
+
+async function cekLogin() {
+  const r = await fetch("/api/me");
+  if (!r.ok) return;
+  const d = await r.json();
+  document.getElementById("nama").textContent = d.username;
+  document.getElementById("loginBox").style.display = "none";
+  document.getElementById("dashBox").style.display = "block";
+
+  refresh();
+  poller = setInterval(refresh, 2000);   // cek status tiap 2 detik
+}
+
+async function refresh() {
+  const r = await fetch("/api/state");
+  if (r.status === 401) return logout();
+  const d = await r.json();
+  document.getElementById("state").textContent  = d.state;
+  document.getElementById("online").textContent = d.online;
+}
+
+async function kirim(cmd) {
+  await fetch("/api/relay", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cmd })
+  });
+  setTimeout(refresh, 300);   // beri jeda, tunggu ESP32 balas
+}
+
+cekLogin();
+</script>
+</body>
+</html>
