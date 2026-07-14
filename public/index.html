@@ -1,89 +1,401 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
-  <meta charset="utf-8">
-  <title>Smart Switch</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Smart Switch</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:system-ui,-apple-system,sans-serif;background:#0d1117;color:#e6edf3;padding:16px;min-height:100vh}
+  .wrap{max-width:1100px;margin:0 auto}
+
+  /* LOGIN */
+  #loginBox{max-width:340px;margin:15vh auto}
+  .card{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:20px}
+  input,select{width:100%;padding:11px;margin-bottom:10px;border-radius:8px;
+    border:1px solid #30363d;background:#0d1117;color:#e6edf3;font-size:14px}
+  button{border:0;border-radius:8px;padding:11px;font-weight:600;cursor:pointer;font-size:14px}
+  .btn-primary{background:#238636;color:#fff;width:100%}
+  .err{color:#f85149;font-size:13px;min-height:18px;margin-bottom:8px}
+
+  /* HEADER */
+  header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px}
+  h1{font-size:20px}
+  .badge{font-size:12px;padding:4px 10px;border-radius:20px;background:#30363d;color:#8b949e}
+  .badge.on{background:#1a7f37;color:#fff}
+  .btn-sm{background:#21262d;color:#8b949e;padding:6px 12px;font-size:12px}
+
+  /* RINGKASAN */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
+  .stat{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px}
+  .stat .lbl{font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:.5px}
+  .stat .val{font-size:22px;font-weight:700;margin-top:4px}
+  .stat .sub{font-size:11px;color:#8b949e;margin-top:2px}
+
+  /* RELAY */
+  .relays{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-bottom:20px}
+  .relay{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:16px;transition:.2s}
+  .relay.aktif{border-color:#1a7f37;box-shadow:0 0 0 1px #1a7f37}
+  .relay-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+  .relay-nama{font-weight:600;font-size:15px}
+  .sw{width:48px;height:26px;background:#30363d;border-radius:20px;position:relative;cursor:pointer;transition:.2s;border:0;padding:0}
+  .sw.on{background:#238636}
+  .sw::after{content:"";position:absolute;width:20px;height:20px;background:#fff;border-radius:50%;top:3px;left:3px;transition:.2s}
+  .sw.on::after{left:25px}
+  .relay-data{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px}
+  .relay-data div{color:#8b949e}
+  .relay-data b{color:#e6edf3;display:block;font-size:15px;margin-top:1px}
+
+  /* SECTION */
+  section{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:16px;margin-bottom:16px}
+  h2{font-size:15px;margin-bottom:12px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+  .row>div{flex:1;min-width:90px}
+  .row label{font-size:11px;color:#8b949e;display:block;margin-bottom:4px}
+  .row input,.row select{margin-bottom:0}
+
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;color:#8b949e;font-weight:500;font-size:11px;
+     text-transform:uppercase;padding:8px 6px;border-bottom:1px solid #30363d}
+  td{padding:9px 6px;border-bottom:1px solid #21262d}
+  .del{background:none;color:#f85149;padding:2px 6px}
+  .tag{font-size:11px;padding:2px 7px;border-radius:4px;background:#30363d}
+  .tag.ON{background:#1a7f37;color:#fff}
+  .tag.OFF{background:#6e2b2b;color:#fff}
+  .kosong{color:#6e7681;font-size:13px;text-align:center;padding:16px}
+  .hide{display:none}
+</style>
 </head>
 <body>
 
-  <div id="loginBox">
-    <h1>Login</h1>
-    <input id="u" placeholder="Username">
-    <input id="p" type="password" placeholder="Password">
-    <button onclick="login()">Masuk</button>
-    <p id="err" style="color:red"></p>
+<!-- ══════ LOGIN ══════ -->
+<div id="loginBox">
+  <div class="card">
+    <h1 style="margin-bottom:16px">Smart Switch</h1>
+    <input id="u" placeholder="Username" autocomplete="username">
+    <input id="p" type="password" placeholder="Password" autocomplete="current-password">
+    <div class="err" id="err"></div>
+    <button class="btn-primary" onclick="login()">Masuk</button>
+  </div>
+</div>
+
+<!-- ══════ DASHBOARD ══════ -->
+<div class="wrap hide" id="dash">
+
+  <header>
+    <div>
+      <h1>Smart Switch</h1>
+      <span class="badge" id="stat">memuat…</span>
+    </div>
+    <div style="display:flex;gap:6px">
+      <button class="btn-sm" onclick="semua('ON')">Semua ON</button>
+      <button class="btn-sm" onclick="semua('OFF')">Semua OFF</button>
+      <button class="btn-sm" onclick="logout()">Keluar</button>
+    </div>
+  </header>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="lbl">Daya Total</div>
+      <div class="val" id="pTotal">0 W</div>
+      <div class="sub" id="vi">— V / — A</div>
+    </div>
+    <div class="stat">
+      <div class="lbl">Energi Total</div>
+      <div class="val" id="kwh">0 kWh</div>
+      <div class="sub">akumulatif</div>
+    </div>
+    <div class="stat">
+      <div class="lbl">Estimasi Biaya</div>
+      <div class="val" id="biaya">Rp 0</div>
+      <div class="sub" id="tarif">—</div>
+    </div>
+    <div class="stat">
+      <div class="lbl">Relay Aktif</div>
+      <div class="val" id="nAktif">0 / 4</div>
+      <div class="sub" id="lastUpd">—</div>
+    </div>
   </div>
 
-  <div id="dashBox" style="display:none">
-    <h1>Smart Switch</h1>
-    <p>Halo, <span id="nama"></span></p>
-    <p>Perangkat: <b id="online">-</b></p>
-    <p>Relay: <b id="state">-</b></p>
+  <div class="relays" id="relays"></div>
 
-    <button onclick="kirim('ON')">ON</button>
-    <button onclick="kirim('OFF')">OFF</button>
-    <button onclick="kirim('TOGGLE')">TOGGLE</button>
+  <section>
+    <h2>Konsumsi Daya (24 jam)</h2>
+    <canvas id="grafik" height="90"></canvas>
+  </section>
 
-    <p><button onclick="logout()">Keluar</button></p>
-  </div>
+  <section>
+    <h2>Jadwal Otomatis</h2>
+    <div class="row" style="margin-bottom:14px">
+      <div>
+        <label>Relay</label>
+        <select id="sRelay">
+          <option value="1">Relay 1</option>
+          <option value="2">Relay 2</option>
+          <option value="3">Relay 3</option>
+          <option value="4">Relay 4</option>
+        </select>
+      </div>
+      <div>
+        <label>Jam (WIB)</label>
+        <input id="sJam" type="time" value="18:00">
+      </div>
+      <div>
+        <label>Aksi</label>
+        <select id="sAksi">
+          <option value="ON">Nyalakan</option>
+          <option value="OFF">Matikan</option>
+        </select>
+      </div>
+      <div style="flex:0 0 auto">
+        <button class="btn-primary" style="width:auto;padding:11px 18px" onclick="tambahJadwal()">Tambah</button>
+      </div>
+    </div>
+    <table>
+      <thead><tr><th>Relay</th><th>Jam</th><th>Aksi</th><th>Status</th><th></th></tr></thead>
+      <tbody id="tJadwal"></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Aktivitas Terakhir</h2>
+    <table>
+      <thead><tr><th>Waktu</th><th>Relay</th><th>Aksi</th><th>Sumber</th></tr></thead>
+      <tbody id="tLog"></tbody>
+    </table>
+  </section>
+
+</div>
 
 <script>
-let poller;
+const $ = id => document.getElementById(id);
+const NAMA = { 1: "Lampu Teras", 2: "Pompa Air", 3: "Kipas", 4: "Stopkontak" };
+let poller, chart, tarif = 1699.53;
 
+// ═══════ AUTH ═══════
 async function login() {
-  document.getElementById("err").textContent = "";
+  $("err").textContent = "";
   const r = await fetch("/api/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      username: document.getElementById("u").value,
-      password: document.getElementById("p").value
-    })
+    body: JSON.stringify({ username: $("u").value, password: $("p").value })
   });
-  if (!r.ok) {
-    document.getElementById("err").textContent = "User atau password salah";
-    return;
-  }
-  cekLogin();
+  if (!r.ok) { $("err").textContent = "Username atau password salah"; return; }
+  masuk();
 }
 
 async function logout() {
   await fetch("/api/logout", { method: "POST" });
   clearInterval(poller);
-  document.getElementById("dashBox").style.display = "none";
-  document.getElementById("loginBox").style.display = "block";
+  $("dash").classList.add("hide");
+  $("loginBox").classList.remove("hide");
 }
 
-async function cekLogin() {
+async function masuk() {
   const r = await fetch("/api/me");
   if (!r.ok) return;
-  const d = await r.json();
-  document.getElementById("nama").textContent = d.username;
-  document.getElementById("loginBox").style.display = "none";
-  document.getElementById("dashBox").style.display = "block";
+  $("loginBox").classList.add("hide");
+  $("dash").classList.remove("hide");
 
+  buatKartu();
   refresh();
-  poller = setInterval(refresh, 2000);   // cek status tiap 2 detik
+  muatJadwal();
+  muatLog();
+  muatGrafik();
+
+  poller = setInterval(refresh, 2000);
+  setInterval(muatGrafik, 60000);
+  setInterval(muatLog, 15000);
 }
 
-async function refresh() {
-  const r = await fetch("/api/state");
-  if (r.status === 401) return logout();
-  const d = await r.json();
-  document.getElementById("state").textContent  = d.state;
-  document.getElementById("online").textContent = d.online;
+// ═══════ RELAY ═══════
+function buatKartu() {
+  $("relays").innerHTML = [1,2,3,4].map(n => `
+    <div class="relay" id="r${n}">
+      <div class="relay-top">
+        <div>
+          <div class="relay-nama">${NAMA[n]}</div>
+          <div style="font-size:11px;color:#8b949e">Relay ${n}</div>
+        </div>
+        <button class="sw" id="sw${n}" onclick="toggle(${n})"></button>
+      </div>
+      <div class="relay-data">
+        <div>Daya<b id="p${n}">0 W</b></div>
+        <div>Arus<b id="i${n}">0 A</b></div>
+        <div>PF<b id="pf${n}">—</b></div>
+        <div>Energi<b id="e${n}">0 kWh</b></div>
+      </div>
+    </div>`).join("");
 }
 
-async function kirim(cmd) {
-  await fetch("/api/relay", {
+async function toggle(n) {
+  await fetch(`/api/relay/${n}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cmd: "TOGGLE" })
+  });
+  setTimeout(refresh, 300);
+  setTimeout(muatLog, 800);
+}
+
+async function semua(cmd) {
+  await fetch("/api/all", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cmd })
   });
-  setTimeout(refresh, 300);   // beri jeda, tunggu ESP32 balas
+  setTimeout(refresh, 400);
+  setTimeout(muatLog, 900);
 }
 
-cekLogin();
+// ═══════ REFRESH ═══════
+async function refresh() {
+  const r = await fetch("/api/state");
+  if (r.status === 401) return logout();
+  const d = await r.json();
+  tarif = d.tarif;
+
+  const on = d.online === "online";
+  $("stat").textContent = on ? "Perangkat online" : "Perangkat offline";
+  $("stat").className = "badge" + (on ? " on" : "");
+
+  const t = d.telemetry;
+  $("pTotal").textContent = `${t.total.p.toFixed(1)} W`;
+  $("vi").textContent     = `${t.total.v.toFixed(1)} V / ${t.total.i.toFixed(2)} A`;
+  $("kwh").textContent    = `${t.total.kwh.toFixed(2)} kWh`;
+  $("biaya").textContent  = "Rp " + Math.round(t.total.kwh * tarif).toLocaleString("id-ID");
+  $("tarif").textContent  = `Rp ${tarif.toLocaleString("id-ID")}/kWh`;
+
+  let aktif = 0;
+  for (let n = 1; n <= 4; n++) {
+    const nyala = d.relay[n] === "ON";
+    if (nyala) aktif++;
+    $("sw" + n).className    = "sw" + (nyala ? " on" : "");
+    $("r"  + n).className    = "relay" + (nyala ? " aktif" : "");
+
+    const c = t.ch[n - 1] || { p:0, i:0, pf:0, kwh:0 };
+    $("p"  + n).textContent  = `${c.p.toFixed(1)} W`;
+    $("i"  + n).textContent  = `${c.i.toFixed(2)} A`;
+    $("pf" + n).textContent  = c.pf ? c.pf.toFixed(2) : "—";
+    $("e"  + n).textContent  = `${c.kwh.toFixed(2)} kWh`;
+  }
+  $("nAktif").textContent = `${aktif} / 4`;
+  $("lastUpd").textContent = d.updated
+    ? "update " + new Date(d.updated).toLocaleTimeString("id-ID")
+    : "belum ada data";
+}
+
+// ═══════ JADWAL ═══════
+async function muatJadwal() {
+  const data = await (await fetch("/api/schedules")).json();
+  if (!data.length) {
+    $("tJadwal").innerHTML = `<tr><td colspan="5" class="kosong">Belum ada jadwal</td></tr>`;
+    return;
+  }
+  $("tJadwal").innerHTML = data.map(s => `
+    <tr>
+      <td>${NAMA[s.relay]}</td>
+      <td><b>${s.jam}</b></td>
+      <td><span class="tag ${s.aksi}">${s.aksi}</span></td>
+      <td>
+        <label style="cursor:pointer;font-size:12px;color:#8b949e">
+          <input type="checkbox" style="width:auto;margin:0 4px 0 0"
+                 ${s.aktif ? "checked" : ""}
+                 onchange="ubahAktif(${s.id}, this.checked)">
+          ${s.aktif ? "aktif" : "nonaktif"}
+        </label>
+      </td>
+      <td style="text-align:right">
+        <button class="del" onclick="hapusJadwal(${s.id})">Hapus</button>
+      </td>
+    </tr>`).join("");
+}
+
+async function tambahJadwal() {
+  const r = await fetch("/api/schedules", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      relay: $("sRelay").value,
+      jam:   $("sJam").value,
+      aksi:  $("sAksi").value
+    })
+  });
+  if (!r.ok) { alert((await r.json()).error); return; }
+  muatJadwal();
+}
+
+async function hapusJadwal(id) {
+  await fetch("/api/schedules/" + id, { method: "DELETE" });
+  muatJadwal();
+}
+
+async function ubahAktif(id, aktif) {
+  await fetch("/api/schedules/" + id, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ aktif })
+  });
+  muatJadwal();
+}
+
+// ═══════ LOG ═══════
+async function muatLog() {
+  const data = await (await fetch("/api/activity")).json();
+  if (!data.length) {
+    $("tLog").innerHTML = `<tr><td colspan="4" class="kosong">Belum ada aktivitas</td></tr>`;
+    return;
+  }
+  $("tLog").innerHTML = data.slice(0, 10).map(a => `
+    <tr>
+      <td>${new Date(a.waktu).toLocaleString("id-ID", {day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}</td>
+      <td>${NAMA[a.relay] || "-"}</td>
+      <td><span class="tag ${a.aksi}">${a.aksi}</span></td>
+      <td style="color:#8b949e">${a.sumber}</td>
+    </tr>`).join("");
+}
+
+// ═══════ GRAFIK ═══════
+async function muatGrafik() {
+  const data = await (await fetch("/api/history?jam=24")).json();
+  const total = data.filter(d => d.channel === 0);
+
+  const labels = total.map(d =>
+    new Date(d.waktu).toLocaleTimeString("id-ID", {hour:"2-digit",minute:"2-digit"}));
+  const nilai = total.map(d => d.daya);
+
+  if (chart) {
+    chart.data.labels = labels;
+    chart.data.datasets[0].data = nilai;
+    chart.update();
+    return;
+  }
+
+  chart = new Chart($("grafik"), {
+    type: "line",
+    data: {
+      labels,
+      datasets: [{
+        label: "Daya Total (W)",
+        data: nilai,
+        borderColor: "#238636",
+        backgroundColor: "rgba(35,134,54,.15)",
+        fill: true, tension: .35, pointRadius: 0, borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid:{color:"#21262d"}, ticks:{color:"#8b949e",maxTicksLimit:8} },
+        y: { grid:{color:"#21262d"}, ticks:{color:"#8b949e"}, beginAtZero:true }
+      }
+    }
+  });
+}
+
+masuk();
 </script>
 </body>
 </html>
