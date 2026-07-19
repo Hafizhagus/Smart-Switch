@@ -12,8 +12,6 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(express.static("public"));
 
-const NAMA = { 1: "Lampu Teras", 2: "Pompa Air", 3: "Kipas", 4: "Stopkontak" };
-
 const JWT_SECRET = process.env.JWT_SECRET;
 const USERS = { [process.env.ADMIN_USER]: process.env.ADMIN_HASH };
 const TARIF = parseFloat(process.env.TARIF_PER_KWH || 1699.53);
@@ -41,6 +39,39 @@ const state = {
   updated: null
 };
 
+// ══════════════ BREAKER (limit arus per relay) ══════════════
+let breakers = {};            // { 1: {relay, limit_a, aktif}, ... }
+const lastTrip = {};          // cooldown per relay
+
+async function muatBreakers() {
+  const { data, error } = await db.from("breakers").select("*");
+  if (error) { console.log("❌ muat breakers:", error.message); return; }
+  breakers = {};
+  (data || []).forEach(b => { breakers[b.relay] = b; });
+  console.log("✅ Breaker settings dimuat:", Object.keys(breakers).length, "relay");
+}
+muatBreakers();
+
+function cekBreaker() {
+  if (state.online !== "online") return;
+  const now = Date.now();
+
+  for (let n = 1; n <= 4; n++) {
+    const b = breakers[n];
+    if (!b || !b.aktif) continue;
+
+    const c = state.telemetry.ch[n - 1];
+    if (!c) continue;
+
+    const cooldownLewat = now - (lastTrip[n] || 0) > 15000;
+    if (state.relay[n] === "ON" && c.i > b.limit_a && cooldownLewat) {
+      lastTrip[n] = now;
+      perintah(n, "OFF", "breaker");
+      console.log(`⚡ BREAKER relay${n}: ${c.i.toFixed(2)} A > limit ${b.limit_a} A → OFF`);
+    }
+  }
+}
+
 // ══════════════ MQTT ══════════════
 const client = mqtt.connect(`mqtts://${process.env.MQTT_HOST}:8883`, {
   username: process.env.MQTT_USER,
@@ -50,7 +81,7 @@ const client = mqtt.connect(`mqtts://${process.env.MQTT_HOST}:8883`, {
 
 client.on("connect", () => {
   console.log("✅ MQTT tersambung");
-  client.subscribe("smartswitch/+/state");     // wildcard: relay1..relay4
+  client.subscribe("smartswitch/+/state");
   client.subscribe("smartswitch/status");
   client.subscribe("smartswitch/telemetry");
 });
@@ -67,6 +98,7 @@ client.on("message", (topic, buf) => {
     try {
       state.telemetry = JSON.parse(isi);
       state.updated = new Date();
+      cekBreaker();                       // cek limit tiap telemetry masuk
     } catch { console.log("⚠️ telemetry bukan JSON valid"); }
     return;
   }
@@ -98,13 +130,11 @@ cron.schedule("*/5 * * * *", async () => {
 
   const { error } = await db.from("energy_log").insert(rows);
   if (error) console.log("❌ simpan energi:", error.message);
-  else console.log("💾 energi tersimpan");
 });
 
 // ══════════════ SCHEDULER (cek tiap menit) ══════════════
 cron.schedule("* * * * *", async () => {
   const now = new Date();
-  // WIB = UTC+7
   const wib = new Date(now.getTime() + 7 * 3600 * 1000);
   const jam = `${String(wib.getUTCHours()).padStart(2, "0")}:${String(wib.getUTCMinutes()).padStart(2, "0")}`;
   const hari = String(wib.getUTCDay());
@@ -185,6 +215,31 @@ app.post("/api/all", auth, (req, res) => {
     return res.status(400).json({ error: "perintah tidak valid" });
 
   [1, 2, 3, 4].forEach(n => perintah(n, cmd, "web"));
+  res.json({ ok: true });
+});
+
+// ══════════════ BREAKER API ══════════════
+app.get("/api/breakers", auth, async (req, res) => {
+  const { data } = await db.from("breakers").select("*").order("relay");
+  res.json(data || []);
+});
+
+app.put("/api/breakers/:relay", auth, async (req, res) => {
+  const n = parseInt(req.params.relay);
+  if (![1, 2, 3, 4].includes(n))
+    return res.status(400).json({ error: "relay tidak valid" });
+
+  const limit_a = parseFloat(req.body.limit_a);
+  const aktif = !!req.body.aktif;
+  if (!(limit_a > 0) || limit_a > 100)
+    return res.status(400).json({ error: "limit harus 0.1–100 A" });
+
+  const { error } = await db.from("breakers")
+    .upsert({ relay: n, limit_a, aktif }, { onConflict: "relay" });
+  if (error) return res.status(500).json({ error: error.message });
+
+  breakers[n] = { relay: n, limit_a, aktif };
+  console.log(`🛡️ breaker relay${n}: ${limit_a} A, aktif=${aktif} (${req.user.username})`);
   res.json({ ok: true });
 });
 
